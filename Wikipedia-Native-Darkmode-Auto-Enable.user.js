@@ -1,9 +1,13 @@
 // ==UserScript==
 // @name         Wikipedia Native Dark Mode Auto-Enable
-// @namespace    https://github.com/Bandit
+// @namespace    https://github.com/Bandit/userscripts
 // @version      1.0.4
 // @description  Automatically enables Wikipedia's built-in dark mode preference on supported skins.
 // @author       Bandit
+// @homepageURL  https://github.com/Bandit/userscripts/blob/main/Wikipedia-Native-Darkmode-Auto-Enable.user.js
+// @supportURL   https://github.com/Bandit/userscripts/issues
+// @updateURL    https://raw.githubusercontent.com/Bandit/userscripts/main/Wikipedia-Native-Darkmode-Auto-Enable.user.js
+// @downloadURL  https://raw.githubusercontent.com/Bandit/userscripts/main/Wikipedia-Native-Darkmode-Auto-Enable.user.js
 // @match        *://*.wikipedia.org/*
 // @run-at       document-start
 // @grant        none

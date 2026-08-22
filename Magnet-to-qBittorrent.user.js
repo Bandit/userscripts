@@ -1,9 +1,13 @@
 // ==UserScript==
 // @name        Send Magnet links to qBittorrent
-// @namespace   https://gist.github.com/Bandit/5496588768d5c4a8fb2e8886f11d2eb4
+// @namespace   https://github.com/Bandit/userscripts
 // @version     1.0.0
 // @description When a magnet: link is detected on a page, it can be right-clicked to send it to a local qBittorrent WebUI instance. Doesn't do anything otherwise.
-// @author      https://github.com/Bandit
+// @author      Bandit
+// @homepageURL https://github.com/Bandit/userscripts/blob/main/Magnet-to-qBittorrent.user.js
+// @supportURL  https://github.com/Bandit/userscripts/issues
+// @updateURL   https://raw.githubusercontent.com/Bandit/userscripts/main/Magnet-to-qBittorrent.user.js
+// @downloadURL https://raw.githubusercontent.com/Bandit/userscripts/main/Magnet-to-qBittorrent.user.js
 // @match       http://*/*
 // @match       https://*/*
 // @noframes

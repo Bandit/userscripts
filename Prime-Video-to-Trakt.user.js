@@ -4,10 +4,10 @@
 // @version      1.0.0
 // @description  Sync your Amazon Prime Video watch history to Trakt.tv
 // @author       Bandit
-// @homepageURL  https://github.com/Bandit/userscripts/blob/main/Prime%20Video%20to%20Trakt/Prime-Video-to-Trakt.user.js
+// @homepageURL  https://github.com/Bandit/userscripts/blob/main/Prime-Video-to-Trakt.user.js
 // @supportURL   https://github.com/Bandit/userscripts/issues
-// @updateURL    https://raw.githubusercontent.com/Bandit/userscripts/main/Prime%20Video%20to%20Trakt/Prime-Video-to-Trakt.user.js
-// @downloadURL  https://raw.githubusercontent.com/Bandit/userscripts/main/Prime%20Video%20to%20Trakt/Prime-Video-to-Trakt.user.js
+// @updateURL    https://raw.githubusercontent.com/Bandit/userscripts/main/Prime-Video-to-Trakt.user.js
+// @downloadURL  https://raw.githubusercontent.com/Bandit/userscripts/main/Prime-Video-to-Trakt.user.js
 // @match        *://*.primevideo.com/*/settings/watch-history*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue

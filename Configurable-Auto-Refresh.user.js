@@ -1,8 +1,13 @@
 // ==UserScript==
 // @name         Configurable Auto Refresh
-// @namespace
+// @namespace    https://github.com/Bandit/userscripts
 // @version      1.0.0
 // @description  Adds a menu option to auto-refresh the current site and optionally notify when its rendered content changes.
+// @author       Bandit
+// @homepageURL  https://github.com/Bandit/userscripts/blob/main/Configurable-Auto-Refresh.user.js
+// @supportURL   https://github.com/Bandit/userscripts/issues
+// @updateURL    https://raw.githubusercontent.com/Bandit/userscripts/main/Configurable-Auto-Refresh.user.js
+// @downloadURL  https://raw.githubusercontent.com/Bandit/userscripts/main/Configurable-Auto-Refresh.user.js
 // @match        http://*/*
 // @match        https://*/*
 // @noframes
