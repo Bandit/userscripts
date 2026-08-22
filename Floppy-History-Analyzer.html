@@ -163,6 +163,7 @@
           <select id="rule">
             <option value="day" selected>Same UTC date</option>
             <option value="window">Within time window</option>
+            <option value="timezone">Matches browser UTC offset</option>
             <option value="exact">Exact timestamp</option>
           </select>
         </label>
@@ -173,7 +174,7 @@
           <button class="button secondary" id="export" type="button" disabled>Export analysis</button>
         </div>
       </div>
-      <p class="control-note">Identity uses provider + media ID + season/episode when available. Title matching is only a fallback and is clearly marked. Same-day rewatches are candidates for review, not proof of duplication.</p>
+      <p class="control-note">Identity uses provider + media ID + season/episode when available. Title matching is only a fallback and is clearly marked. The timezone rule uses this browser's UTC offset on each record date, including daylight-saving changes. Candidates are for review, not proof of duplication.</p>
     </section>
 
     <section class="summary" aria-label="Analysis summary">
@@ -236,7 +237,7 @@
     (() => {
       'use strict';
 
-      const state = { raw: null, entries: [], groups: [], diagnostics: [], canDelete: false, deletionSelection: new Set(), pendingDeletions: [] };
+      const state = { raw: null, entries: [], groups: [], diagnostics: [], canDelete: false, deletionSelection: new Set(), pendingDeletions: [], analysisRefreshId: 0 };
       const elements = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
       const connectionStorage = {
         baseUrl: 'floppy-history-analyzer.base-url',
@@ -279,6 +280,16 @@
         if (!value) return null;
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? null : date;
+      }
+
+      const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'medium',
+      });
+
+      function formatDateTime(value) {
+        const date = validDate(value);
+        return date ? dateTimeFormatter.format(date) : 'Unknown date';
       }
 
       function looksLikeEntry(object) {
@@ -357,6 +368,14 @@
 
       function completionTime(entry) {
         return validDate(entry.detail?.end_date || entry.detail?.progressed_at)?.getTime() ?? entry.timestampMs ?? -Infinity;
+      }
+
+      function matchesBrowserTimezoneOffset(firstEntry, secondEntry) {
+        const differenceMs = Math.abs(secondEntry.timestampMs - firstEntry.timestampMs);
+        const offsetsMs = [firstEntry, secondEntry]
+          .map(entry => Math.abs(new Date(entry.timestampMs).getTimezoneOffset()) * 60_000)
+          .filter(offsetMs => offsetMs > 0);
+        return offsetsMs.some(offsetMs => Math.abs(differenceMs - offsetMs) <= 60_000);
       }
 
       function deletionKey(entry) {
@@ -450,17 +469,17 @@
       }
 
       async function enrichCandidateDetails() {
-        const entries = [...new Set(state.groups.flatMap(group => group.entries))];
-        let failures = 0;
+        const entries = [...new Set(state.groups.flatMap(group => group.entries))].filter(entry => !entry.detail);
         await Promise.all(entries.map(async entry => {
-          try { entry.detail = await readOnlyGet(historyDetailPath(entry)); }
-          catch (error) { entry.detailError = error.message; failures++; }
+          try {
+            entry.detail = await readOnlyGet(historyDetailPath(entry));
+            delete entry.detailError;
+          } catch (error) { entry.detailError = error.message; }
         }));
-        analyze();
-        return failures;
+        return [...new Set(state.groups.flatMap(group => group.entries))].filter(entry => !entry.detail).length;
       }
 
-      function analyze() {
+      function analyze(resetSelection = false) {
         const rule = elements.rule.value;
         const windowMs = Number(elements['window-hours'].value) * 3_600_000;
         const buckets = new Map();
@@ -489,6 +508,21 @@
               exact.get(entry.timestamp).push(entry);
             });
             exact.forEach(items => { if (items.length > 1) groups.push(items); });
+          } else if (rule === 'timezone') {
+            const remaining = new Set(entries);
+            while (remaining.size) {
+              const cluster = [remaining.values().next().value];
+              remaining.delete(cluster[0]);
+              for (let index = 0; index < cluster.length; index++) {
+                for (const candidate of [...remaining]) {
+                  if (matchesBrowserTimezoneOffset(cluster[index], candidate)) {
+                    cluster.push(candidate);
+                    remaining.delete(candidate);
+                  }
+                }
+              }
+              if (cluster.length > 1) groups.push(cluster);
+            }
           } else {
             let cluster = [];
             for (const entry of entries) {
@@ -507,13 +541,36 @@
             id: index + 1,
             entries,
             keeper,
-            actionable: spanMs <= 2 * 3_600_000,
-            confidence: confidenceFor(entries),
+            actionable: rule !== 'timezone' && spanMs <= 2 * 3_600_000,
+            confidence: rule === 'timezone'
+              ? { label: 'Review: matches browser UTC offset', className: 'review' }
+              : confidenceFor(entries),
             recommendationBasis: entries.every(entry => entry.detail) ? 'latest detailed end_date' : 'latest history timestamp',
           };
         });
-        checkRecommended(false);
+        if (resetSelection) checkRecommended(false);
+        else normalizeSelection();
         render();
+      }
+
+      async function refreshAnalysisDetails() {
+        if (!state.raw) return;
+        const refreshId = ++state.analysisRefreshId;
+        state.canDelete = false;
+        analyze(false);
+        elements.rule.disabled = true;
+        elements['window-hours'].disabled = true;
+        setStatus(`Refreshing exact history details for ${state.groups.length} candidate groups...`);
+        const failures = await enrichCandidateDetails();
+        if (refreshId !== state.analysisRefreshId) return;
+        analyze(false);
+        state.canDelete = failures === 0;
+        elements.rule.disabled = false;
+        elements['window-hours'].disabled = false;
+        render();
+        setStatus(failures
+          ? `Analysis refreshed, but ${failures} exact history details could not be loaded. Deletion review remains disabled.`
+          : `Analysis refreshed for the new rule. Exact history details are complete and selections that remain actionable were preserved.`, failures ? 'error' : 'success');
       }
 
       function escapeHtml(value) {
@@ -549,13 +606,13 @@
             ? `<span class="badge ${keep ? 'keep' : 'remove'}">${keep ? 'Recommended keep' : 'Delete candidate'}</span><div class="muted">${escapeHtml(group.recommendationBasis)}</div>`
             : '<span class="badge review">Review only</span><div class="muted">Excluded from deletion: group spans over two hours</div>';
           const detail = entry.detail
-            ? `<div class="muted">Created ${escapeHtml(new Date(entry.detail.created).toLocaleString())}</div>`
+            ? `<div class="muted">Created ${escapeHtml(formatDateTime(entry.detail.created))}</div>`
             : entry.detailError ? `<div class="muted">Detail unavailable</div>` : '';
           return `<tr class="${index === 0 ? 'group-start' : ''}">
             <td class="delete-cell"><input class="delete-choice" type="checkbox" aria-label="Delete history entry ${escapeHtml(entry.historyId)}" data-key="${escapeHtml(deletionKey(entry))}" ${state.deletionSelection.has(deletionKey(entry)) ? 'checked' : ''} ${state.canDelete ? '' : 'disabled'}></td>
             <td><strong>#${group.id}</strong><div class="muted">${index === 0 ? `${group.entries.length} entries` : ''}</div></td>
             <td><div class="title">${escapeHtml(entry.title)}</div>${episode}<span class="badge">${escapeHtml(entry.mediaType)}</span></td>
-            <td>${entry.timestamp ? escapeHtml(new Date(entry.timestamp).toLocaleString()) : '<span class="muted">No timestamp</span>'}<div class="muted"><code>${escapeHtml(entry.timestamp)}</code></div>${detail}</td>
+            <td>${entry.timestamp ? escapeHtml(formatDateTime(entry.timestamp)) : '<span class="muted">No timestamp</span>'}${detail}</td>
             <td><code>${escapeHtml(entry.historyId)}</code><div class="muted">${escapeHtml(entry.sourcePath)}</div></td>
             <td><code>${escapeHtml(entry.identity)}</code><div class="muted">${escapeHtml(entry.identityQuality)}</div></td>
             <td>${recommendation}<span class="badge ${group.confidence.className}">${escapeHtml(group.confidence.label)}</span></td>
@@ -576,7 +633,7 @@
         state.deletionSelection.clear();
         state.raw = raw;
         state.entries = flattenHistory(raw);
-        analyze();
+        analyze(true);
         if (!state.entries.length) {
           setStatus(`Loaded ${sourceLabel}, but no recognizable history entries were found. Inspect diagnostics to adapt the normalizer.`, 'error');
         } else {
@@ -584,6 +641,7 @@
           if (enrichDetails && state.groups.length) {
             setStatus(`Loaded ${state.entries.length} entries. Reading exact history details for ${state.groups.length} candidate groups...`);
             const failures = await enrichCandidateDetails();
+            analyze(false);
             state.canDelete = failures === 0;
             render();
             detailMessage = failures ? ` ${failures} detail requests failed; those recommendations use list timestamps.` : ' Recommendations use exact history details.';
@@ -661,8 +719,8 @@
           return `<div class="review-item" data-index="${index}">
             <span class="badge remove">Delete</span>
             <span><strong>${escapeHtml(entry.title)}</strong>${escapeHtml(episode)}<br><span class="muted">Group #${candidate.groupId} · history ID ${escapeHtml(entry.historyId)}</span></span>
-            <span><span class="muted">Delete completion</span><br>${escapeHtml(new Date(entry.detail.end_date).toLocaleString())}</span>
-            <span><span class="muted">Retained completion</span><br>${escapeHtml(new Date(candidate.retainedEntry.detail.end_date).toLocaleString())}</span>
+            <span><span class="muted">Delete completion</span><br>${escapeHtml(formatDateTime(entry.detail.end_date))}</span>
+            <span><span class="muted">Retained completion</span><br>${escapeHtml(formatDateTime(candidate.retainedEntry.detail.end_date))}</span>
           </div>`;
         }).join('');
         elements['confirm-deletions'].checked = false;
@@ -694,8 +752,8 @@
             ...group,
             entries,
             keeper,
-            actionable: Math.max(...times) - Math.min(...times) <= 2 * 3_600_000,
-            confidence: confidenceFor(entries),
+            actionable: group.actionable && Math.max(...times) - Math.min(...times) <= 2 * 3_600_000,
+            confidence: group.actionable ? confidenceFor(entries) : group.confidence,
           }];
         });
         deletedKeys.forEach(key => state.deletionSelection.delete(key));
@@ -738,6 +796,16 @@
         if (shouldRender) render();
       }
 
+      function normalizeSelection() {
+        const actionableKeys = new Set(state.groups.filter(group => group.actionable).flatMap(group => group.entries.map(deletionKey)));
+        state.deletionSelection = new Set([...state.deletionSelection].filter(key => actionableKeys.has(key)));
+        for (const group of state.groups) {
+          if (group.entries.every(entry => state.deletionSelection.has(deletionKey(entry)))) {
+            state.deletionSelection.delete(deletionKey(group.keeper));
+          }
+        }
+      }
+
       function uncheckAll() {
         state.deletionSelection.clear();
         render();
@@ -766,8 +834,8 @@
         catch (error) { setStatus(`Could not parse JSON: ${error.message}`, 'error'); }
         event.target.value = '';
       });
-      elements.rule.addEventListener('change', analyze);
-      elements['window-hours'].addEventListener('input', analyze);
+      elements.rule.addEventListener('change', refreshAnalysisDetails);
+      elements['window-hours'].addEventListener('change', refreshAnalysisDetails);
       elements.filter.addEventListener('input', render);
       elements.results.addEventListener('change', event => {
         if (event.target.matches('.delete-choice')) updateRowSelection(event.target);
