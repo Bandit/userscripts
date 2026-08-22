@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Floppy History Analyzer</title>
+  <style>
+    :root {
+      --ink: #18201d;
+      --muted: #65716c;
+      --paper: #f4f6f2;
+      --panel: #ffffff;
+      --line: #d8ded9;
+      --accent: #087e6a;
+      --accent-dark: #056050;
+      --warn: #a85d00;
+      --danger: #a23232;
+      --soft: #e8f3ef;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: linear-gradient(135deg, #edf2ed 0, var(--paper) 44%, #eef1e9 100%);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .88);
+      backdrop-filter: blur(10px);
+    }
+
+    .header-inner, main { width: min(1400px, calc(100% - 32px)); margin: 0 auto; }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 0; }
+    h1 { margin: 0; font-family: Georgia, serif; font-size: 26px; letter-spacing: 0; }
+    h2 { margin: 0 0 14px; font-size: 17px; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); }
+    .read-only {
+      display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+      border: 1px solid #9bcbbf; background: var(--soft); color: var(--accent-dark);
+      padding: 7px 10px; border-radius: 6px; font-weight: 700;
+    }
+    .read-only::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+    main { padding: 24px 0 48px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; margin-bottom: 16px; box-shadow: 0 5px 18px rgba(24, 32, 29, .05); }
+    .connection-grid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto; gap: 12px; align-items: end; }
+    label { display: grid; gap: 6px; color: var(--muted); font-weight: 600; }
+    input, select { width: 100%; border: 1px solid #bfc8c1; border-radius: 5px; background: #fff; color: var(--ink); padding: 9px 10px; min-height: 40px; }
+    input:focus, select:focus { outline: 2px solid rgba(8, 126, 106, .18); border-color: var(--accent); }
+    .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .button { min-height: 40px; border: 1px solid var(--accent); border-radius: 5px; padding: 8px 14px; background: var(--accent); color: #fff; font-weight: 700; }
+    .button:hover { background: var(--accent-dark); }
+    .button.secondary { color: var(--ink); background: #fff; border-color: #aeb8b0; }
+    .button.secondary:hover { background: #f0f3f0; }
+    .button.danger { background: var(--danger); border-color: var(--danger); }
+    .button.danger:hover { background: #7f2222; }
+    .file-button input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+    .file-button { display: inline-flex; align-items: center; }
+    .notice { margin-top: 12px; color: var(--muted); line-height: 1.45; }
+    .notice strong { color: var(--ink); }
+    #status[data-kind="error"] { color: var(--danger); }
+    #status[data-kind="success"] { color: var(--accent-dark); }
+
+    .controls { display: grid; grid-template-columns: 1fr 180px 160px auto; gap: 12px; align-items: end; }
+    .control-note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .summary { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .metric { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 14px 16px; }
+    .metric-value { display: block; font-family: Georgia, serif; font-size: 25px; margin-bottom: 2px; }
+    .metric-label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+
+    .results-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 12px; }
+    .results-header h2 { margin: 0; }
+    .selection-tools { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; min-width: 960px; background: #fff; }
+    th, td { border-bottom: 1px solid #e3e7e3; padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; z-index: 1; background: #eff3ef; color: #46504b; font-size: 12px; text-transform: uppercase; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .group-start td { border-top: 2px solid #aebbb3; }
+    .delete-cell { text-align: center; }
+    .delete-choice { width: 18px; height: 18px; min-height: auto; accent-color: var(--danger); }
+    .title { font-weight: 700; }
+    .muted { color: var(--muted); }
+    code { font-family: Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
+    .badge { display: inline-block; border-radius: 4px; padding: 3px 6px; font-size: 11px; font-weight: 700; background: #edf0ed; color: #4d5852; }
+    .badge.high { background: #f9e8e5; color: #8d2e27; }
+    .badge.medium { background: #fff0d9; color: #895000; }
+    .badge.review { background: #e8eef8; color: #34537b; }
+    .badge.keep { background: #dff3e9; color: #07634f; }
+    .badge.remove { background: #f9e8e5; color: #8d2e27; }
+    .empty { padding: 42px 18px; text-align: center; color: var(--muted); }
+    details { margin-top: 14px; }
+    summary { cursor: pointer; font-weight: 700; }
+    pre { max-height: 340px; overflow: auto; padding: 12px; border-radius: 5px; background: #15201c; color: #dfe9e3; white-space: pre-wrap; }
+    dialog { width: min(1000px, calc(100% - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--panel); box-shadow: 0 18px 60px rgba(20, 28, 24, .28); }
+    dialog::backdrop { background: rgba(15, 22, 19, .62); }
+    .dialog-header, .dialog-footer { padding: 16px 18px; background: #f4f6f3; }
+    .dialog-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; border-bottom: 1px solid var(--line); }
+    .dialog-header h2 { margin-bottom: 4px; }
+    .dialog-body { padding: 16px 18px; overflow: auto; max-height: calc(100vh - 240px); }
+    .dialog-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-top: 1px solid var(--line); }
+    .review-list { display: grid; gap: 8px; }
+    .review-item { display: grid; grid-template-columns: auto minmax(180px, 1fr) minmax(190px, auto) minmax(190px, auto); gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 5px; }
+    .review-item input, .confirm-delete input { width: auto; min-height: auto; }
+    .confirm-delete { display: flex; grid-template-columns: none; flex-direction: row; align-items: center; gap: 8px; color: var(--ink); }
+    .icon-button { width: 36px; height: 36px; border: 1px solid #aeb8b0; border-radius: 5px; background: #fff; color: var(--ink); font-size: 22px; line-height: 1; }
+
+    @media (max-width: 850px) {
+      .header-inner { align-items: flex-start; }
+      .connection-grid, .controls, .review-item { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div>
+        <h1>Floppy History Analyzer</h1>
+        <p class="subtitle">Inspect possible duplicate watches before making any changes.</p>
+      </div>
+      <div class="read-only">Nothing deleted without confirmation</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" aria-labelledby="connection-title">
+      <h2 id="connection-title">Connection</h2>
+      <div class="connection-grid">
+        <label>Floppy instance URL
+          <input id="base-url" type="url" placeholder="https://floppy.example.com" autocomplete="url">
+        </label>
+        <label>API token
+          <input id="api-token" type="password" placeholder="Token from Settings > Integrations" autocomplete="off">
+        </label>
+        <div class="button-row">
+          <button class="button" id="load-api" type="button">Load history</button>
+          <label class="button secondary file-button">Import JSON
+            <input id="json-file" type="file" accept="application/json,.json">
+          </label>
+        </div>
+      </div>
+      <div id="status" class="notice" role="status">Analysis uses read-only <strong>GET</strong> requests. Deletion is available only after reviewing exact history records and confirming the proposed cleanup. The URL and token are stored only for this browser tab and are never exported.</div>
+    </section>
+
+    <section class="panel" aria-labelledby="rules-title">
+      <h2 id="rules-title">Analysis rules</h2>
+      <div class="controls">
+        <label>Filter results
+          <input id="filter" type="search" placeholder="Title, type, provider, ID...">
+        </label>
+        <label>Duplicate rule
+          <select id="rule">
+            <option value="day" selected>Same UTC date</option>
+            <option value="window">Within time window</option>
+            <option value="exact">Exact timestamp</option>
+          </select>
+        </label>
+        <label>Time window (hours)
+          <input id="window-hours" type="number" min="0.1" max="168" step="0.5" value="24">
+        </label>
+        <div class="button-row">
+          <button class="button secondary" id="export" type="button" disabled>Export analysis</button>
+        </div>
+      </div>
+      <p class="control-note">Identity uses provider + media ID + season/episode when available. Title matching is only a fallback and is clearly marked. Same-day rewatches are candidates for review, not proof of duplication.</p>
+    </section>
+
+    <section class="summary" aria-label="Analysis summary">
+      <div class="metric"><span class="metric-value" id="entry-count">0</span><span class="metric-label">History entries</span></div>
+      <div class="metric"><span class="metric-value" id="group-count">0</span><span class="metric-label">Candidate groups</span></div>
+      <div class="metric"><span class="metric-value" id="extra-count">0</span><span class="metric-label">Possible extras</span></div>
+      <div class="metric"><span class="metric-value" id="unresolved-count">0</span><span class="metric-label">Unresolved entries</span></div>
+    </section>
+
+    <section class="panel" aria-labelledby="results-title">
+      <div class="results-header">
+        <h2 id="results-title">Candidate duplicate groups</h2>
+        <span id="result-caption" class="muted">Load history to begin.</span>
+      </div>
+      <div class="selection-tools">
+        <div class="button-row">
+          <button class="button secondary" id="check-recommended" type="button" disabled>Check recommended</button>
+          <button class="button secondary" id="uncheck-all" type="button" disabled>Uncheck all</button>
+        </div>
+        <strong id="selection-count">0 selected for deletion</strong>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Delete</th><th>Group</th><th>Media</th><th>Played / completed</th><th>History ID</th><th>Identity</th><th>Recommendation</th></tr></thead>
+          <tbody id="results"></tbody>
+        </table>
+        <div id="empty" class="empty">No analysis loaded.</div>
+      </div>
+      <details>
+        <summary>Raw response and normalization diagnostics</summary>
+        <pre id="diagnostics">No data loaded.</pre>
+      </details>
+      <div class="button-row" style="justify-content: flex-end; margin-top: 16px;">
+        <button class="button danger" id="review-deletions" type="button" disabled>Review proposed deletions (0)</button>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="delete-dialog" aria-labelledby="delete-dialog-title">
+    <div class="dialog-header">
+      <div>
+        <h2 id="delete-dialog-title">Review proposed deletions</h2>
+        <div id="delete-dialog-summary" class="muted"></div>
+      </div>
+      <button class="icon-button" id="close-dialog" type="button" aria-label="Close review dialog" title="Close">&times;</button>
+    </div>
+    <div class="dialog-body">
+      <div id="deletion-list" class="review-list"></div>
+    </div>
+    <div class="dialog-footer">
+      <label class="confirm-delete"><input id="confirm-deletions" type="checkbox"> I reviewed the selected records and understand deletion cannot be undone.</label>
+      <div class="button-row">
+        <button class="button secondary" id="cancel-deletions" type="button">Cancel</button>
+        <button class="button danger" id="approve-deletions" type="button" disabled>Delete selected</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const state = { raw: null, entries: [], groups: [], diagnostics: [], canDelete: false, deletionSelection: new Set(), pendingDeletions: [] };
+      const elements = Object.fromEntries([...document.querySelectorAll('[id]')].map(element => [element.id, element]));
+      const connectionStorage = {
+        baseUrl: 'floppy-history-analyzer.base-url',
+        apiToken: 'floppy-history-analyzer.api-token',
+      };
+
+      function restoreConnection() {
+        try {
+          elements['base-url'].value = sessionStorage.getItem(connectionStorage.baseUrl) || '';
+          elements['api-token'].value = sessionStorage.getItem(connectionStorage.apiToken) || '';
+        } catch {}
+      }
+
+      function storeConnection() {
+        try {
+          sessionStorage.setItem(connectionStorage.baseUrl, elements['base-url'].value);
+          sessionStorage.setItem(connectionStorage.apiToken, elements['api-token'].value);
+        } catch {}
+      }
+
+      function setStatus(message, kind = '') {
+        elements.status.textContent = message;
+        elements.status.dataset.kind = kind;
+      }
+
+      function first(object, paths) {
+        for (const path of paths) {
+          let value = object;
+          for (const key of path.split('.')) value = value && typeof value === 'object' ? value[key] : undefined;
+          if (value !== undefined && value !== null && value !== '') return value;
+        }
+        return null;
+      }
+
+      function normalizeText(value) {
+        return String(value || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
+      }
+
+      function validDate(value) {
+        if (!value) return null;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+
+      function looksLikeEntry(object) {
+        if (!object || typeof object !== 'object' || Array.isArray(object)) return false;
+        const hasHistoryId = first(object, ['history_id', 'consumption_id', 'play_id', 'instance_id', 'entry_key', 'id']) !== null;
+        const hasMedia = first(object, ['media_type', 'type', 'item.media_type', 'media.media_type', 'item.title', 'media.title', 'title']) !== null;
+        const hasEvent = first(object, ['played_at', 'played_at_local', 'watched_at', 'end_date', 'completed_at', 'progressed_at', 'created', 'date']) !== null;
+        return hasHistoryId && hasMedia && hasEvent;
+      }
+
+      function normalizeEntry(object, inheritedDate, path) {
+        const item = first(object, ['item', 'media']) || {};
+        const details = first(object, ['details', 'item.details', 'media.details']) || {};
+        const dateValue = first(object, ['played_at', 'played_at_local', 'watched_at', 'end_date', 'completed_at', 'progressed_at', 'created', 'date']) || inheritedDate;
+        const date = validDate(dateValue);
+        const mediaType = first(object, ['media_type', 'type', 'item.media_type', 'media.media_type']) || 'unknown';
+        const source = first(object, ['source', 'item.source', 'media.source']) || '';
+        const mediaId = first(object, ['media_id', 'item.media_id', 'media.media_id', 'item_id']);
+        const season = first(object, ['season_number', 'season', 'details.season_number', 'item.details.season_number', 'media.details.season_number']);
+        const episode = first(object, ['episode_number', 'episode', 'details.episode_number', 'item.details.episode_number', 'media.details.episode_number']);
+        const title = first(object, ['series_title', 'show_title', 'item.series_title', 'media.series_title', 'item.title', 'media.title', 'title']) || 'Untitled';
+        const episodeTitle = first(object, ['episode_title', 'subtitle', 'details.title', 'item.episode_title']) || '';
+        const historyId = first(object, ['history_id', 'consumption_id', 'play_id', 'instance_id', 'entry_key', 'id']);
+        const stableIdentity = source && mediaId !== null
+          ? `${mediaType}|${source}|${mediaId}|${season ?? ''}|${episode ?? ''}`
+          : '';
+        const fallbackIdentity = `${mediaType}|title:${normalizeText(title)}|${season ?? ''}|${episode ?? ''}`;
+
+        return {
+          mediaType: String(mediaType), source: String(source), mediaId: mediaId === null ? '' : String(mediaId),
+          season, episode, title: String(title), episodeTitle: String(episodeTitle), historyId: String(historyId),
+          timestamp: date ? date.toISOString() : '', timestampMs: date ? date.getTime() : null,
+          identity: stableIdentity || fallbackIdentity, identityQuality: stableIdentity ? 'stable' : 'title fallback',
+          sourcePath: path, raw: object,
+        };
+      }
+
+      function flattenHistory(raw) {
+        const entries = [];
+        const seenObjects = new WeakSet();
+
+        function visit(value, inheritedDate = null, path = '$') {
+          if (!value || typeof value !== 'object') return;
+          if (seenObjects.has(value)) return;
+          seenObjects.add(value);
+          if (Array.isArray(value)) {
+            value.forEach((item, index) => visit(item, inheritedDate, `${path}[${index}]`));
+            return;
+          }
+
+          const groupDate = first(value, ['date', 'day']) || inheritedDate;
+          if (looksLikeEntry(value)) {
+            entries.push(normalizeEntry(value, groupDate, path));
+            return;
+          }
+          Object.entries(value).forEach(([key, child]) => {
+            const keyDate = /^\d{4}-\d{2}-\d{2}/.test(key) ? key : groupDate;
+            visit(child, keyDate, `${path}.${key}`);
+          });
+        }
+
+        visit(raw);
+        return entries.filter((entry, index, all) => all.findIndex(candidate =>
+          candidate.sourcePath === entry.sourcePath ||
+          (candidate.historyId === entry.historyId && candidate.mediaType === entry.mediaType && candidate.identity === entry.identity)
+        ) === index);
+      }
+
+      function confidenceFor(entries) {
+        const times = entries.map(entry => entry.timestampMs).filter(value => value !== null).sort((a, b) => a - b);
+        const spread = times.length > 1 ? times[times.length - 1] - times[0] : Infinity;
+        if (spread <= 60_000) return { label: 'High: near-identical time', className: 'high' };
+        if (spread <= 2 * 3_600_000) return { label: 'Medium: within two hours', className: 'medium' };
+        return { label: 'Review only: wide time span', className: 'review' };
+      }
+
+      function completionTime(entry) {
+        return validDate(entry.detail?.end_date || entry.detail?.progressed_at)?.getTime() ?? entry.timestampMs ?? -Infinity;
+      }
+
+      function deletionKey(entry) {
+        return `${entry.mediaType}|${entry.source}|${entry.mediaId}|${entry.season ?? ''}|${entry.episode ?? ''}|${entry.historyId}`;
+      }
+
+      function historyDetailPath(entry) {
+        const segments = entry.mediaType === 'episode'
+          ? ['media', 'tv', entry.source, entry.mediaId, entry.season, entry.episode, 'history', entry.historyId]
+          : ['media', entry.mediaType, entry.source, entry.mediaId, 'history', entry.historyId];
+        return `/api/v1/${segments.map(segment => encodeURIComponent(String(segment))).join('/')}/`;
+      }
+
+      async function readOnlyGet(path) {
+        const baseUrl = elements['base-url'].value.trim().replace(/\/+$/, '');
+        const token = elements['api-token'].value.trim();
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: 'GET',
+          headers: { 'X-API-Key': token, Accept: 'application/json' },
+          mode: 'cors',
+          cache: 'no-store',
+        });
+        const text = await response.text();
+        let data;
+        try { data = JSON.parse(text); } catch { throw new Error(`GET ${path} returned non-JSON content (HTTP ${response.status}).`); }
+        if (!response.ok) throw new Error(data.detail || `GET ${path} failed with HTTP ${response.status}.`);
+        return data;
+      }
+
+      async function readAllHistory() {
+        const limit = 100;
+        const firstPage = await readOnlyGet(`/api/v1/history/?limit=${limit}&offset=0`);
+        if (!Array.isArray(firstPage.results) || !firstPage.pagination) throw new Error('History API returned an unexpected pagination shape.');
+        const total = Number(firstPage.pagination.total);
+        if (!Number.isFinite(total) || total < 0) throw new Error('History API returned an invalid total.');
+
+        const pages = new Map([[0, firstPage.results]]);
+        const offsets = [];
+        for (let offset = limit; offset < total; offset += limit) offsets.push(offset);
+        let pagesLoaded = 1;
+
+        async function loadPage(offset) {
+          let lastError;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const data = await readOnlyGet(`/api/v1/history/?limit=${limit}&offset=${offset}`);
+              if (!Array.isArray(data.results)) throw new Error('History API returned an unexpected page shape.');
+              return data.results;
+            } catch (error) {
+              lastError = error;
+              if (!/HTTP 50[234]/.test(error.message) || attempt === 3) throw error;
+            }
+          }
+          throw lastError;
+        }
+
+        async function worker() {
+          while (offsets.length) {
+            const offset = offsets.shift();
+            pages.set(offset, await loadPage(offset));
+            pagesLoaded++;
+            setStatus(`Loading history groups: about ${Math.min(pagesLoaded * limit, total)} of ${total}...`);
+          }
+        }
+
+        await Promise.all(Array.from({ length: Math.min(4, offsets.length) }, worker));
+        const results = [...pages.entries()].sort(([left], [right]) => left - right).flatMap(([, page]) => page);
+
+        return {
+          pagination: { total, limit, offset: 0, next: null, previous: null, pages_loaded: pagesLoaded },
+          results,
+        };
+      }
+
+      async function deleteExactHistory(entry) {
+        const baseUrl = elements['base-url'].value.trim().replace(/\/+$/, '');
+        const token = elements['api-token'].value.trim();
+        const path = historyDetailPath(entry);
+        const response = await fetch(`${baseUrl}${path}`, {
+          method: 'DELETE',
+          headers: { 'X-API-Key': token, Accept: 'application/json' },
+          mode: 'cors',
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          let message = `DELETE ${path} failed with HTTP ${response.status}.`;
+          try { message = JSON.parse(text).detail || message; } catch {}
+          throw new Error(message);
+        }
+      }
+
+      async function enrichCandidateDetails() {
+        const entries = [...new Set(state.groups.flatMap(group => group.entries))];
+        let failures = 0;
+        await Promise.all(entries.map(async entry => {
+          try { entry.detail = await readOnlyGet(historyDetailPath(entry)); }
+          catch (error) { entry.detailError = error.message; failures++; }
+        }));
+        analyze();
+        return failures;
+      }
+
+      function analyze() {
+        const rule = elements.rule.value;
+        const windowMs = Number(elements['window-hours'].value) * 3_600_000;
+        const buckets = new Map();
+
+        for (const entry of state.entries) {
+          if (!entry.identity || entry.timestampMs === null) continue;
+          if (!buckets.has(entry.identity)) buckets.set(entry.identity, []);
+          buckets.get(entry.identity).push(entry);
+        }
+
+        const groups = [];
+        for (const entries of buckets.values()) {
+          entries.sort((a, b) => a.timestampMs - b.timestampMs);
+          if (rule === 'day') {
+            const days = new Map();
+            entries.forEach(entry => {
+              const key = entry.timestamp.slice(0, 10);
+              if (!days.has(key)) days.set(key, []);
+              days.get(key).push(entry);
+            });
+            days.forEach(items => { if (items.length > 1) groups.push(items); });
+          } else if (rule === 'exact') {
+            const exact = new Map();
+            entries.forEach(entry => {
+              if (!exact.has(entry.timestamp)) exact.set(entry.timestamp, []);
+              exact.get(entry.timestamp).push(entry);
+            });
+            exact.forEach(items => { if (items.length > 1) groups.push(items); });
+          } else {
+            let cluster = [];
+            for (const entry of entries) {
+              if (!cluster.length || entry.timestampMs - cluster[cluster.length - 1].timestampMs <= windowMs) cluster.push(entry);
+              else { if (cluster.length > 1) groups.push(cluster); cluster = [entry]; }
+            }
+            if (cluster.length > 1) groups.push(cluster);
+          }
+        }
+
+        state.groups = groups.map((entries, index) => {
+          const keeper = entries.reduce((latest, entry) => completionTime(entry) > completionTime(latest) ? entry : latest);
+          const times = entries.map(entry => entry.timestampMs).filter(value => value !== null);
+          const spanMs = Math.max(...times) - Math.min(...times);
+          return {
+            id: index + 1,
+            entries,
+            keeper,
+            actionable: spanMs <= 2 * 3_600_000,
+            confidence: confidenceFor(entries),
+            recommendationBasis: entries.every(entry => entry.detail) ? 'latest detailed end_date' : 'latest history timestamp',
+          };
+        });
+        checkRecommended(false);
+        render();
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character]);
+      }
+
+      function render() {
+        const query = normalizeText(elements.filter.value);
+        const groups = state.groups.filter(group => !query || group.entries.some(entry => normalizeText(
+          `${entry.title} ${entry.episodeTitle} ${entry.mediaType} ${entry.source} ${entry.mediaId} ${entry.historyId}`
+        ).includes(query)));
+        const unresolved = state.entries.filter(entry => !entry.identity || entry.timestampMs === null || entry.historyId === '').length;
+        elements['entry-count'].textContent = state.entries.length;
+        elements['group-count'].textContent = state.groups.length;
+        elements['extra-count'].textContent = state.groups.reduce((total, group) => total + group.entries.length - 1, 0);
+        elements['unresolved-count'].textContent = unresolved;
+        elements['result-caption'].textContent = state.raw ? `${groups.length} of ${state.groups.length} candidate groups shown` : 'Load history to begin.';
+        elements.export.disabled = !state.raw;
+        const selectedCount = state.deletionSelection.size;
+        elements['selection-count'].textContent = `${selectedCount} selected for deletion`;
+        elements['review-deletions'].textContent = `Review proposed deletions (${selectedCount})`;
+        elements['review-deletions'].disabled = !state.canDelete || !selectedCount;
+        elements['check-recommended'].disabled = !state.canDelete || !state.groups.length;
+        elements['uncheck-all'].disabled = !state.canDelete || !selectedCount;
+        elements.empty.hidden = groups.length > 0;
+        elements.empty.textContent = state.raw ? 'No duplicate candidates match the current rule and filter.' : 'No analysis loaded.';
+
+        elements.results.innerHTML = groups.flatMap(group => group.entries.map((entry, index) => {
+          const episode = entry.episode !== null && entry.episode !== undefined
+            ? `<div class="muted">S${escapeHtml(entry.season ?? '?')} E${escapeHtml(entry.episode)}${entry.episodeTitle ? ` · ${escapeHtml(entry.episodeTitle)}` : ''}</div>` : '';
+          const keep = entry === group.keeper;
+          const recommendation = group.actionable
+            ? `<span class="badge ${keep ? 'keep' : 'remove'}">${keep ? 'Recommended keep' : 'Delete candidate'}</span><div class="muted">${escapeHtml(group.recommendationBasis)}</div>`
+            : '<span class="badge review">Review only</span><div class="muted">Excluded from deletion: group spans over two hours</div>';
+          const detail = entry.detail
+            ? `<div class="muted">Created ${escapeHtml(new Date(entry.detail.created).toLocaleString())}</div>`
+            : entry.detailError ? `<div class="muted">Detail unavailable</div>` : '';
+          return `<tr class="${index === 0 ? 'group-start' : ''}">
+            <td class="delete-cell"><input class="delete-choice" type="checkbox" aria-label="Delete history entry ${escapeHtml(entry.historyId)}" data-key="${escapeHtml(deletionKey(entry))}" ${state.deletionSelection.has(deletionKey(entry)) ? 'checked' : ''} ${state.canDelete ? '' : 'disabled'}></td>
+            <td><strong>#${group.id}</strong><div class="muted">${index === 0 ? `${group.entries.length} entries` : ''}</div></td>
+            <td><div class="title">${escapeHtml(entry.title)}</div>${episode}<span class="badge">${escapeHtml(entry.mediaType)}</span></td>
+            <td>${entry.timestamp ? escapeHtml(new Date(entry.timestamp).toLocaleString()) : '<span class="muted">No timestamp</span>'}<div class="muted"><code>${escapeHtml(entry.timestamp)}</code></div>${detail}</td>
+            <td><code>${escapeHtml(entry.historyId)}</code><div class="muted">${escapeHtml(entry.sourcePath)}</div></td>
+            <td><code>${escapeHtml(entry.identity)}</code><div class="muted">${escapeHtml(entry.identityQuality)}</div></td>
+            <td>${recommendation}<span class="badge ${group.confidence.className}">${escapeHtml(group.confidence.label)}</span></td>
+          </tr>`;
+        })).join('');
+
+        elements.diagnostics.textContent = JSON.stringify({
+          responseShape: Array.isArray(state.raw) ? 'array' : typeof state.raw,
+          normalizedEntries: state.entries.length,
+          unresolvedEntries: unresolved,
+          sampleNormalizedEntries: state.entries.slice(0, 5),
+          raw: state.raw,
+        }, null, 2);
+      }
+
+      async function loadData(raw, sourceLabel, enrichDetails = false) {
+        state.canDelete = false;
+        state.deletionSelection.clear();
+        state.raw = raw;
+        state.entries = flattenHistory(raw);
+        analyze();
+        if (!state.entries.length) {
+          setStatus(`Loaded ${sourceLabel}, but no recognizable history entries were found. Inspect diagnostics to adapt the normalizer.`, 'error');
+        } else {
+          let detailMessage = '';
+          if (enrichDetails && state.groups.length) {
+            setStatus(`Loaded ${state.entries.length} entries. Reading exact history details for ${state.groups.length} candidate groups...`);
+            const failures = await enrichCandidateDetails();
+            state.canDelete = failures === 0;
+            render();
+            detailMessage = failures ? ` ${failures} detail requests failed; those recommendations use list timestamps.` : ' Recommendations use exact history details.';
+          }
+          setStatus(`Loaded ${state.entries.length} history entries from ${sourceLabel}.${detailMessage} No data was changed.`, 'success');
+        }
+      }
+
+      async function loadApi() {
+        const baseUrl = elements['base-url'].value.trim().replace(/\/+$/, '');
+        const token = elements['api-token'].value.trim();
+        if (!/^https?:\/\//i.test(baseUrl) || !token) {
+          setStatus('Enter a valid Floppy URL and API token.', 'error');
+          return;
+        }
+
+        elements['load-api'].disabled = true;
+        setStatus('Loading GET /api/v1/history/...');
+        try {
+          const data = await readAllHistory();
+          await loadData(data, 'the Floppy API', true);
+        } catch (error) {
+          setStatus(`${error.message} If the browser blocked CORS, export GET /api/v1/history/ as JSON and use Import JSON.`, 'error');
+        } finally {
+          elements['load-api'].disabled = false;
+        }
+      }
+
+      function exportAnalysis() {
+        const cleanupPlan = state.groups.filter(group => group.entries.some(entry => state.deletionSelection.has(deletionKey(entry)))).map(group => ({
+          group_id: group.id,
+          identity: group.keeper.identity,
+          title: group.keeper.title,
+          recommendation_basis: group.recommendationBasis,
+          retained: group.entries.filter(entry => !state.deletionSelection.has(deletionKey(entry))).map(entry => ({
+            history_id: entry.historyId,
+            completed_at: entry.detail?.end_date || entry.timestamp,
+            detail_path: historyDetailPath(entry),
+          })),
+          delete_candidates: group.entries.filter(entry => state.deletionSelection.has(deletionKey(entry))).map(entry => ({
+            history_id: entry.historyId,
+            completed_at: entry.detail?.end_date || entry.timestamp,
+            detail_path: historyDetailPath(entry),
+          })),
+        }));
+        const report = {
+          generated_at: new Date().toISOString(),
+          read_only: true,
+          rule: elements.rule.value,
+          window_hours: Number(elements['window-hours'].value),
+          total_entries: state.entries.length,
+          cleanup_plan: cleanupPlan,
+          candidate_groups: state.groups,
+        };
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `floppy-history-analysis-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }
+
+      function openDeletionReview() {
+        if (!state.canDelete) return;
+        state.pendingDeletions = state.groups.flatMap(group => {
+          const retained = group.entries.filter(entry => !state.deletionSelection.has(deletionKey(entry)));
+          const retainedEntry = retained.reduce((latest, entry) => completionTime(entry) > completionTime(latest) ? entry : latest);
+          return group.entries
+            .filter(entry => state.deletionSelection.has(deletionKey(entry)))
+            .map(entry => ({ entry, retainedEntry, groupId: group.id }));
+        });
+        elements['deletion-list'].innerHTML = state.pendingDeletions.map((candidate, index) => {
+          const entry = candidate.entry;
+          const episode = entry.episode !== null && entry.episode !== undefined ? ` S${entry.season ?? '?'} E${entry.episode}` : '';
+          return `<div class="review-item" data-index="${index}">
+            <span class="badge remove">Delete</span>
+            <span><strong>${escapeHtml(entry.title)}</strong>${escapeHtml(episode)}<br><span class="muted">Group #${candidate.groupId} · history ID ${escapeHtml(entry.historyId)}</span></span>
+            <span><span class="muted">Delete completion</span><br>${escapeHtml(new Date(entry.detail.end_date).toLocaleString())}</span>
+            <span><span class="muted">Retained completion</span><br>${escapeHtml(new Date(candidate.retainedEntry.detail.end_date).toLocaleString())}</span>
+          </div>`;
+        }).join('');
+        elements['confirm-deletions'].checked = false;
+        updateDeletionApproval();
+        elements['delete-dialog'].showModal();
+      }
+
+      function selectedDeletions() {
+        return state.pendingDeletions;
+      }
+
+      function updateDeletionApproval() {
+        const count = selectedDeletions().length;
+        elements['delete-dialog-summary'].textContent = `${count} exact history records selected. At least one entry remains in every group.`;
+        elements['approve-deletions'].textContent = count ? `Delete ${count} selected` : 'Delete selected';
+        elements['approve-deletions'].disabled = !count || !elements['confirm-deletions'].checked;
+      }
+
+      function applySuccessfulDeletions(deletedEntries) {
+        const deletedKeys = new Set(deletedEntries.map(deletionKey));
+        const previousGroupCount = state.groups.length;
+        state.entries = state.entries.filter(entry => !deletedKeys.has(deletionKey(entry)));
+        state.groups = state.groups.flatMap(group => {
+          const entries = group.entries.filter(entry => !deletedKeys.has(deletionKey(entry)));
+          if (entries.length < 2) return [];
+          const keeper = entries.reduce((latest, entry) => completionTime(entry) > completionTime(latest) ? entry : latest);
+          const times = entries.map(entry => entry.timestampMs).filter(value => value !== null);
+          return [{
+            ...group,
+            entries,
+            keeper,
+            actionable: Math.max(...times) - Math.min(...times) <= 2 * 3_600_000,
+            confidence: confidenceFor(entries),
+          }];
+        });
+        deletedKeys.forEach(key => state.deletionSelection.delete(key));
+        render();
+        return previousGroupCount - state.groups.length;
+      }
+
+      async function approveDeletions() {
+        const selected = selectedDeletions();
+        if (!selected.length || !elements['confirm-deletions'].checked) return;
+        elements['approve-deletions'].disabled = true;
+        elements['cancel-deletions'].disabled = true;
+        elements['close-dialog'].disabled = true;
+        let deleted = 0;
+        const deletedEntries = [];
+        const failures = [];
+        for (const candidate of selected) {
+          elements['approve-deletions'].textContent = `Deleting ${deleted + 1} of ${selected.length}...`;
+          try {
+            await deleteExactHistory(candidate.entry);
+            deleted++;
+            deletedEntries.push(candidate.entry);
+          }
+          catch (error) { failures.push({ id: candidate.entry.historyId, message: error.message }); }
+        }
+        elements['delete-dialog'].close();
+        elements['cancel-deletions'].disabled = false;
+        elements['close-dialog'].disabled = false;
+        const completedGroups = applySuccessfulDeletions(deletedEntries);
+        state.pendingDeletions = [];
+        setStatus(failures.length
+          ? `Deleted ${deleted} records and completed ${completedGroups} groups. ${failures.length} failed and remain selected; use Load history when you want to verify against the server.`
+          : `Deleted ${deleted} records and completed ${completedGroups} groups. The table was updated locally; use Load history when you want to verify against the server.`, failures.length ? 'error' : 'success');
+      }
+
+      function checkRecommended(shouldRender = true) {
+        state.deletionSelection = new Set(state.groups.filter(group => group.actionable).flatMap(group => group.entries
+          .filter(entry => entry !== group.keeper)
+          .map(deletionKey)));
+        if (shouldRender) render();
+      }
+
+      function uncheckAll() {
+        state.deletionSelection.clear();
+        render();
+      }
+
+      function updateRowSelection(input) {
+        const group = state.groups.find(candidate => candidate.entries.some(entry => deletionKey(entry) === input.dataset.key));
+        if (!group) return;
+        if (input.checked) state.deletionSelection.add(input.dataset.key);
+        else state.deletionSelection.delete(input.dataset.key);
+        if (group.entries.every(entry => state.deletionSelection.has(deletionKey(entry)))) {
+          state.deletionSelection.delete(input.dataset.key);
+          input.checked = false;
+          setStatus(`Group #${group.id} must retain at least one history entry.`, 'error');
+        }
+        render();
+      }
+
+      elements['load-api'].addEventListener('click', loadApi);
+      elements['base-url'].addEventListener('input', storeConnection);
+      elements['api-token'].addEventListener('input', storeConnection);
+      elements['json-file'].addEventListener('change', async event => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try { await loadData(JSON.parse(await file.text()), file.name); }
+        catch (error) { setStatus(`Could not parse JSON: ${error.message}`, 'error'); }
+        event.target.value = '';
+      });
+      elements.rule.addEventListener('change', analyze);
+      elements['window-hours'].addEventListener('input', analyze);
+      elements.filter.addEventListener('input', render);
+      elements.results.addEventListener('change', event => {
+        if (event.target.matches('.delete-choice')) updateRowSelection(event.target);
+      });
+      elements.export.addEventListener('click', exportAnalysis);
+      elements['check-recommended'].addEventListener('click', () => checkRecommended());
+      elements['uncheck-all'].addEventListener('click', uncheckAll);
+      elements['review-deletions'].addEventListener('click', openDeletionReview);
+      elements['confirm-deletions'].addEventListener('change', updateDeletionApproval);
+      elements['close-dialog'].addEventListener('click', () => elements['delete-dialog'].close());
+      elements['cancel-deletions'].addEventListener('click', () => elements['delete-dialog'].close());
+      elements['approve-deletions'].addEventListener('click', approveDeletions);
+      restoreConnection();
+      render();
+    })();
+  </script>
+</body>
+</html>
