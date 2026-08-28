@@ -19,6 +19,8 @@
 // @connect      *
 // ==/UserScript==
 
+// Optional: replace @connect * above with the hostname from your Floppy instance URL.
+
 (function () {
   'use strict';
 
