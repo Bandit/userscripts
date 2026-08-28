@@ -26,6 +26,12 @@ Reads Amazon Prime Video watch history, matches movies and episodes against Trak
 
 A Trakt application client ID and client secret are required and are stored by the userscript manager. Sadly this requires VIP now, which is why I moved to [Floppy](https://github.com/dannyvfilms/Floppy).
 
+### `Shudder-Watched-on-Floppy.user.js`
+
+Adds a watched checkmark to Shudder movie and series cards by comparing their titles with a user-configured Floppy instance's watch history. The Floppy-style indicator shows the latest watch time on hover and follows Shudder's in-page navigation and newly loaded grids automatically.
+
+A Floppy instance URL and API token are required and are stored by the userscript manager. After the initial history load, the script caches watched titles and requests only recent movie and episode history. The userscript menu provides connection settings, refresh and cache-rebuild commands, and a sanitized debug log. Full history loading uses adaptive pagination to recover from slow pages.
+
 ### `Wikipedia-Native-Darkmode-Auto-Enable.user.js`
 
 Automatically enables Wikipedia's native dark-mode preference on supported desktop and mobile skins. It runs at document start to reduce light-theme flashing and supports both anonymous and signed-in preference mechanisms. I hate that this script is even needed.
