@@ -30,7 +30,15 @@ A Trakt application client ID and client secret are required and are stored by t
 
 Adds a watched checkmark to Shudder movie and series cards by comparing their titles with a user-configured Floppy instance's watch history. The Floppy-style indicator shows the latest watch time on hover and follows Shudder's in-page navigation and newly loaded grids automatically.
 
-A Floppy instance URL and API token are required and are stored by the userscript manager. After the initial history load, the script caches watched titles and requests only recent movie and episode history. The userscript menu provides connection settings, refresh and cache-rebuild commands, and a sanitized debug log. Full history loading uses adaptive pagination to recover from slow pages.
+A Floppy instance URL and API token are required and are stored by the userscript manager. After the initial history load, the script caches watched titles and requests only recent movie and episode history. The userscript menu provides connection settings, an explicit connection-copy command, refresh and cache-rebuild commands, and a sanitized debug log. Full history loading uses adaptive pagination to recover from slow pages.
+
+### `Shudder-Watchlist-to-Floppy.user.js`
+
+Syncs the movie and series cards on Shudder My List to a custom Floppy list. Use the button beside the My List heading or the userscript menu to sync. Setup can create a new "Shudder Watchlist" list or use an existing editable list. The default additive mode never removes list entries; optional mirror mode removes only entries previously added by this script to the same list and Floppy connection.
+
+Titles are matched conservatively against Floppy's TMDB movie or TV search using Shudder's content type. A unique exact normalized title is tracked in Floppy with Planning status if needed, then added to the selected list. Ambiguous matches open a visual review dialog with Shudder artwork beside the candidate posters; confirmed choices are remembered for later syncs and can be cleared from the userscript menu. Missing matches remain in the last-sync report.
+
+Userscript-manager storage is isolated between separate scripts, so credentials are not shared silently. Both Shudder scripts provide copy and import menu commands for an explicit clipboard handoff in either direction. The API token is never placed in Shudder's page storage; treat the temporary clipboard contents like a password.
 
 ### `Wikipedia-Native-Darkmode-Auto-Enable.user.js`
 

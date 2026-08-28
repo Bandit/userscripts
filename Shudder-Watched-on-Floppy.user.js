@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Shudder Watched on Floppy
 // @namespace    https://github.com/Bandit/userscripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  Show a watched indicator on Shudder cards using your Floppy history
 // @author       Bandit
 // @homepageURL  https://github.com/Bandit/userscripts/blob/main/Shudder-Watched-on-Floppy.user.js
@@ -177,6 +177,8 @@
   GM_registerMenuCommand('Floppy: Refresh watched indicators', () => loadHistory());
   GM_registerMenuCommand('Floppy: Rebuild watched cache', () => loadHistory({ forceFull: true }));
   GM_registerMenuCommand('Floppy: Settings', () => showSettings());
+  GM_registerMenuCommand('Floppy: Copy connection settings', () => copyConnectionSettings());
+  GM_registerMenuCommand('Floppy: Import connection settings', () => importConnectionSettings());
   GM_registerMenuCommand('Floppy: Debug log', () => showDebugLog());
 
   debugLog('Script started', {
@@ -220,7 +222,7 @@
   function debugReport() {
     const baseUrl = store.get('base_url').trim().replace(/\/+$/, '');
     return [
-      'Shudder Watched on Floppy v1.0.0',
+      'Shudder Watched on Floppy v1.0.1',
       `Generated: ${new Date().toISOString()}`,
       `Page: ${location.href}`,
       `Floppy URL: ${baseUrl || '(not configured)'}`,
@@ -535,6 +537,33 @@
     clearTimeout(toast.hideTimer);
     if (duration) toast.hideTimer = setTimeout(() => toast.remove(), duration);
     return toast;
+  }
+
+  function copyConnectionSettings() {
+    const baseUrl = store.get('base_url').trim().replace(/\/+$/, '');
+    const apiToken = store.get('api_token').trim();
+    if (!baseUrl || !apiToken) {
+      showToast('Configure your Floppy connection before copying it.', 5000);
+      return;
+    }
+    GM_setClipboard(JSON.stringify({ type: 'floppy-connection', version: 1, baseUrl, apiToken }), 'text');
+    showToast('Floppy connection copied. Treat the clipboard contents like a password.', 5000);
+  }
+
+  function importConnectionSettings() {
+    const value = prompt('Paste copied Floppy connection settings.');
+    if (!value) return;
+    try {
+      const connection = JSON.parse(value);
+      if (connection?.type !== 'floppy-connection' || connection?.version !== 1 || !/^https?:\/\//i.test(connection.baseUrl) || !connection.apiToken) {
+        throw new Error('Unrecognized connection data.');
+      }
+      store.set('base_url', connection.baseUrl.trim().replace(/\/+$/, ''));
+      store.set('api_token', connection.apiToken.trim());
+      showSettings();
+    } catch (error) {
+      showToast(error.message || 'Could not import the connection.', 6000);
+    }
   }
 
   function showDebugLog() {
