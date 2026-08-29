@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Shudder Watchlist to Floppy
 // @namespace    https://github.com/Bandit/userscripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  Sync titles from Shudder My List to a custom Floppy list
 // @author       Bandit
 // @homepageURL  https://github.com/Bandit/userscripts/blob/main/Shudder-Watchlist-to-Floppy.user.js
@@ -153,6 +153,22 @@
     return `managed_items_${connectionFingerprint()}_${listId}`;
   }
 
+  function syncedTitlesKey(listId) {
+    return `synced_titles_${connectionFingerprint()}_${listId}`;
+  }
+
+  function getSyncedTitles(listId = store.get('list_id')) {
+    if (!listId) return new Set();
+    const cached = store.get(syncedTitlesKey(listId), null);
+    if (Array.isArray(cached)) return new Set(cached);
+    const managed = store.get(managedItemsKey(listId), []);
+    return new Set((Array.isArray(managed) ? managed : []).map(item => item.normalizedTitle).filter(Boolean));
+  }
+
+  function saveSyncedTitles(listId, titles) {
+    store.set(syncedTitlesKey(listId), [...titles]);
+  }
+
   function matchOverridesKey() {
     return `match_overrides_${connectionFingerprint()}`;
   }
@@ -197,24 +213,38 @@
       existing?.remove();
       return;
     }
-    if (existing) return;
+    if (existing) {
+      updateSyncButton();
+      return;
+    }
     const title = [...document.querySelectorAll('.card-list > .card-list-title[role="heading"]')]
       .find(element => element.textContent.trim() === 'My List');
     if (!title) return;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'swlf-sync-button';
-    button.textContent = syncInProgress ? 'Syncing...' : 'Sync to Floppy';
     button.disabled = syncInProgress;
     button.addEventListener('click', () => syncWatchlist());
     title.insertAdjacentElement('afterend', button);
+    updateSyncButton();
   }
 
   function updateSyncButton() {
     const button = document.querySelector('.swlf-sync-button');
     if (!button) return;
     button.disabled = syncInProgress;
-    button.textContent = syncInProgress ? 'Syncing...' : 'Sync to Floppy';
+    if (syncInProgress) {
+      if (button.textContent !== 'Syncing...') button.textContent = 'Syncing...';
+      return;
+    }
+    const cards = collectCards();
+    const syncedTitles = getSyncedTitles();
+    const syncedCount = cards.filter(card => syncedTitles.has(card.normalizedTitle)).length;
+    const unsyncedCount = cards.length - syncedCount;
+    const label = cards.length
+      ? `Sync to Floppy (${unsyncedCount ? `${unsyncedCount} unsynced` : 'All synced'})`
+      : 'Sync to Floppy';
+    if (button.textContent !== label) button.textContent = label;
   }
 
   function schedulePageUpdate() {
@@ -374,6 +404,7 @@
     const storedManaged = store.get(managedKey, []);
     const priorManaged = Array.isArray(storedManaged) ? storedManaged : [];
     const managedByIdentity = new Map(priorManaged.map(item => [item.identity, item]));
+    const syncedTitles = getSyncedTitles(report.listId);
     const currentTitles = new Set(cards.map(card => card.normalizedTitle));
 
     try {
@@ -397,6 +428,7 @@
           if (result === 'added' || managedByIdentity.has(identity)) {
             managedByIdentity.set(identity, managed);
           }
+          syncedTitles.add(card.normalizedTitle);
           report[result === 'added' ? 'added' : 'alreadyPresent'].push(card.title);
         } catch (error) {
           report.failed.push({ title: card.title, error: error.message || String(error) });
@@ -410,6 +442,7 @@
             const response = await floppyRequest('DELETE', mediaPath(managed, report.listId), undefined, [404]);
             if (response.status !== 404) report.removed.push(managed.title);
             managedByIdentity.delete(managed.identity);
+            syncedTitles.delete(managed.normalizedTitle);
           } catch (error) {
             report.failed.push({ title: managed.title, error: `Removal failed: ${error.message || String(error)}` });
           }
@@ -417,6 +450,7 @@
       }
 
       store.set(managedKey, [...managedByIdentity.values()]);
+      saveSyncedTitles(report.listId, syncedTitles);
       report.finishedAt = new Date().toISOString();
       lastReport = report;
       store.set('last_report', report);
@@ -578,6 +612,7 @@
       const managedByIdentity = new Map(
         (Array.isArray(storedManaged) ? storedManaged : []).map(item => [item.identity, item]),
       );
+      const syncedTitles = getSyncedTitles(report.listId);
       const appliedTitles = new Set();
 
       for (const input of selected) {
@@ -598,6 +633,7 @@
             });
           }
           report[result === 'added' ? 'added' : 'alreadyPresent'].push(item.title);
+          syncedTitles.add(item.normalizedTitle);
           appliedTitles.add(item.normalizedTitle);
         } catch (applyError) {
           report.failed.push({ title: item.title, error: applyError.message || String(applyError) });
@@ -605,11 +641,13 @@
       }
 
       store.set(managedKey, [...managedByIdentity.values()]);
+      saveSyncedTitles(report.listId, syncedTitles);
       report.unresolved = report.unresolved.filter(item => !appliedTitles.has(item.normalizedTitle));
       report.finishedAt = new Date().toISOString();
       lastReport = report;
       store.set('last_report', report);
       backdrop.remove();
+      updateSyncButton();
       showToast(`Applied ${appliedTitles.size} reviewed match${appliedTitles.size === 1 ? '' : 'es'} to Floppy.`, 6000);
     });
     backdrop.querySelector('[data-json]').addEventListener('click', () => {
