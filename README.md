@@ -10,6 +10,10 @@ I recommend [Violentmonkey](https://violentmonkey.github.io/) for running the us
 
 Adds a configurable automatic page refreshing toolbar to the bottom right corner of any website. It includes pause and countdown controls and can optionally send a notification when the rendered page content changes. Good for queue pages and waiting for things to unlock.
 
+### `IMDB-Rating-on-Hover.user.js`
+
+Shows IMDb's rating and vote count in a compact badge when hovering IMDb title links on non-IMDb sites. Configure a compatible API URL from the userscript menu, using `{id}` where the title ID belongs. The endpoint should return JSON with `rating` and `votes`; [IMDbFlare](https://github.com/Bandit/imdbflare) is a reference for building your own API.
+
 ### `Magnet-to-qBittorrent.user.js`
 
 "Takes over" the context menu when right-clicking any `magnet:` link on any webpage and lets you send it to a qBittorrent WebUI. It supports saved connection settings, category selection, tags, save-path overrides, paused downloads, sequential downloading, and related torrent options.
