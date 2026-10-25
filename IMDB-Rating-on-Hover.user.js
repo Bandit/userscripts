@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Rating on Hover
 // @namespace    https://github.com/Bandit/userscripts
-// @version      1.0.0
+// @version      1.0.1
 // @description  Show IMDb ratings and vote counts when hovering title links.
 // @author       Bandit
 // @homepageURL  https://github.com/Bandit/userscripts/blob/main/IMDB-Rating-on-Hover.user.js
@@ -25,7 +25,7 @@
   'use strict';
 
   const STORAGE_KEY = 'irho_api_url';
-  const LOGO_URL = 'https://projectile.nz/imdb-logo-2016.svg';
+  const LOGO_URL = 'https://skyhook.projectile.nz/imdb-logo-2016.svg';
   const REQUEST_TIMEOUT_MS = 10000;
   const ratingRequests = new Map();
 
